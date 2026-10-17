@@ -1,0 +1,177 @@
+---
+title: "Employee Performance Prediction"
+author: "Rajvi Soni (group project contributor)"
+date: "2026-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Performance Rating Prediction using Classification Decision Tree.
+
+#Understanding the employee_performance data.
+myData <- read.csv("data/employee_performance.csv")
+
+head(myData)
+
+summary(myData) #From summary, their are no null or missing value!
+
+str(myData)
+
+#Making sure that their are no missing value
+colSums(is.na(myData)) #Confirmed that their are no missing value!
+
+#Now our Data is all set to predict performance rating!
+```
+
+```{r}
+#Performance Rating distribution
+table(myData$PerformanceRating)
+
+barplot(table(myData$PerformanceRating),
+        main = "Performance Rating Distribution",
+        xlab = "Performance Rating",
+        ylab = "Number of Employees",
+        col = "lightgreen")
+
+#This shows whether most employees are Normal(0) or High(1) performers.
+```
+
+```{r}
+#Creating Boxplot for importance variables 
+#Satisfaction score vs Performance Rating
+boxplot(SatisfactionScore ~ PerformanceRating,
+        data = myData,
+        main = "Satisfaction Score by Performance Rating",
+        xlab = "Performance Rating",
+        ylab = "Satisfaction Score",
+        col = "lightblue")
+
+
+#Leadership Score vs Performance Rating
+boxplot(LeadershipScore ~ PerformanceRating,
+        data = myData,
+        main = "Leadership Score by Performance Rating",
+        xlab = "Performance Rating",
+        ylab = "Leadership Score",
+        col = "lightyellow")
+
+#Number of Projects vs Performance Rating
+boxplot(NumProjects ~ PerformanceRating,
+        data = myData,
+        main = "Number of Projects by Performance Rating",
+        xlab = "Performance Rating",
+        ylab = "Number of Projects",
+        col = "lightpink")
+
+#Training Hours vs Performance Rating
+boxplot(TrainingHours ~ PerformanceRating,
+        data = myData,
+        main = "Training Hours by Performance Rating",
+        xlab = "Performance Rating",
+        ylab = "Training Hours",
+        col = "plum1")
+```
+
+```{r}
+
+#Splitting data into training and testing.
+set.seed(123)
+
+library(caret)
+trainIndex <- createDataPartition(myData$PerformanceRating,
+                                  p = 0.80,
+                                  list = FALSE)
+
+train_data <- myData[trainIndex, ]
+test_data <- myData[-trainIndex, ]
+
+#Training contain 80% of data and 20% for Testing.
+nrow(train_data)
+nrow(test_data)
+```
+
+```{r}
+#Classification decision tree model.
+library(rpart)
+tree_model <- rpart(PerformanceRating ~ Age + EducationLevel + Department +
+                      YearsExperience + WorkHoursPerWeek + Overtime +
+                      NumProjects + TrainingHours + SatisfactionScore +
+                      PromotionLast3Years + LeadershipScore,
+                    data = train_data,
+                    method = "class")
+
+summary(tree_model)
+
+library(rattle)
+fancyRpartPlot(tree_model,
+           main = "Decision Tree for Predicting Performance Rating")
+```
+
+```{r}
+
+predictions <- predict(tree_model,
+                       newdata = test_data,
+                       type = "class")
+head(predictions)
+```
+
+```{r}
+#Confusion Matrix
+test_data$Performance.Rating <- factor(test_data$PerformanceRating,
+                                       levels = c("0","1"))
+
+predictions <- factor(predictions,
+                      levels = c("0","1"))
+
+confusionMatrix(predictions, test_data$Performance.Rating)
+
+#shows how well your model predicted Normal vs High performance.
+```
+
+```{r}
+#Variable importance
+tree_model$variable.importance
+
+importance_df <- data.frame(
+  Variable = names(tree_model$variable.importance),
+  Importance = tree_model$variable.importance
+)
+
+importance_df
+
+barplot(importance_df$Importance,
+        names.arg = importance_df$Variable,
+        main = "Variable Importance for Performance Rating",
+        xlab = "Variables",
+        ylab = "Importance",
+        las = 2,
+        col = "chocolate")
+```
+
+```{r}
+# Decision tree pruning using complexity parameter to prevent overfitting.
+printcp(tree_model)
+plotcp(tree_model)
+
+#Choosing the best CP value.
+best_cp <- tree_model$cptable[which.min(tree_model$cptable[, "xerror"]), "CP"]
+
+pruned_tree <- prune(tree_model, cp = best_cp)
+
+library(rpart.plot)
+rpart.plot(pruned_tree,
+           main = "Pruned Decision Tree for Performance Rating")
+
+#Now predicting again using pruned tree.
+pruned_predictions <- predict(pruned_tree,
+                              newdata = test_data,
+                              type = "class")
+
+confusionMatrix(pruned_predictions, test_data$Performance.Rating)
+
+```
+
